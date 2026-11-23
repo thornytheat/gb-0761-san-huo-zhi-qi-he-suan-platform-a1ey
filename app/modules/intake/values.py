@@ -23,14 +23,14 @@ def minute_stamp(text):
         raise ValueError("INVALID_MINUTE_STAMP") from None
 
 
-def amount(text, places=2):
+def amount(text, places=2, allow_negative=False):
     try:
         value = Decimal(text)
-        if not value.is_finite() or value < 0 or value > 10**8:
+        if not value.is_finite() or abs(value) > 10**8 or (value < 0 and not allow_negative):
             raise InvalidOperation
         quantized = value.quantize(Decimal(1).scaleb(-places))
         if value != quantized:
             raise InvalidOperation
-        return format(abs(quantized), f".{places}f")
+        return format(quantized, f".{places}f")
     except InvalidOperation:
         raise ValueError("INVALID_AMOUNT") from None

@@ -1,5 +1,6 @@
 from collections import Counter, defaultdict
 from datetime import datetime
+from decimal import Decimal
 
 from app.config import FILES
 from app.reasons import issue
@@ -18,13 +19,25 @@ def normalize(source, value):
             raise ValueError("UNKNOWN_EVENT")
     if source == "stops" and value["kind"] not in {"RAIN", "HOLIDAY", "GAP"}:
         raise ValueError("UNKNOWN_STOP")
+    ticketed = source == "invoice" and "ticket" in value
+    if ticketed and not value["ticket"].strip():
+        raise ValueError("EMPTY_TICKET")
     for key in value:
         if key.endswith('_min') or key in {"minutes", "priority", "tier", "usd"}:
             places = 2 if key.startswith("rate") or key == "usd" else 0
-            numeric = amount(value[key], places)
+            numeric = amount(value[key], places, allow_negative=ticketed)
             value[key] = numeric if places else int(numeric)
-    if source == "invoice" and value["tier"] not in {1, 2}:
-        raise ValueError("UNKNOWN_TIER")
+    if source == "invoice":
+        if value["tier"] not in {1, 2}:
+            raise ValueError("UNKNOWN_TIER")
+        # 原票与红字票按符号区分：红字票分钟、美元均不得为正，原票不得为负。
+        usd = Decimal(value["usd"])
+        if usd < 0 or value["minutes"] < 0:
+            if usd > 0 or value["minutes"] > 0:
+                raise ValueError("TICKET_SIGN_MISMATCH")
+            value["kind"] = "CREDIT"
+        else:
+            value["kind"] = "ORIGINAL"
     return value
 
 
@@ -37,14 +50,17 @@ def accept(sources):
         for line, raw, fields in records:
             try:
                 value = normalize(source, fields)
-                groups[value[keys[source]]].append((line, raw, value))
+                # 新式分票按票号去重，同档多张原票各自成立；旧式账单仍按档位去重。
+                dedupe_key = "ticket" if source == "invoice" and "ticket" in value else keys[source]
+                groups[value[dedupe_key]].append((line, raw, value))
             except ValueError as exc:
                 issues.append(issue(str(exc), source, line, raw))
         output = []
         for group in groups.values():
             first, *repeats = group
             if any(row[2] != first[2] for row in repeats):
-                issues.extend({**issue("KEY_CONFLICT", source, line, raw), "key": value[keys[source]]}
+                issues.extend({**issue("KEY_CONFLICT", source, line, raw), "key": value[keys[source]],
+                               "tier": value.get("tier")}
                               for line, raw, value in group)
                 continue
             output.append({**first[2], "line": first[0], "raw": first[1]})

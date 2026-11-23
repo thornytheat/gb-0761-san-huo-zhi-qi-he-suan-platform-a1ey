@@ -28,11 +28,13 @@
 | TRAP-19 | S01/S02 重叠 | 双免或随行序 | 明确优先级并列依据 | `app/modules/exceptions/precedence.py` | `tests/test_exceptions.py::test_precedence_permutation` |
 | TRAP-23 | S04/S05 贴窗 | 交界重算 | 半开并裁边 | `app/modules/exceptions/service.py` | `tests/test_exceptions.py::test_touching_window_is_outside` |
 | TRAP-25 | R1/R2 同时有效 | 随顺序定档 | 以最高优先级裁决 | `app/modules/notice/versions.py` | `tests/test_notice.py::test_notice_picks_active_priority` |
+| TRAP-27 | 同档拆票、红字先到 | 直接扣减冲成负数 | 票号去重，净额封边，待冲红字另列 | `app/modules/ledger/service.py` `app/modules/intake/service.py` | `tests/test_ticket_ledger.py` |
 
 ## 对账规则
 
 - 每源正文行数 = 采信 + 隔离 + 空行 + 重复表头。
 - 150 min = 75 min 合同计时 + 60 min 免计 + 15 min 缺证。75−35=40 min 超额。
 - 应计 20×3 + 20×5 = 160.00 USD，船方 60+95=155.00 USD，相差 5.00 USD。
+- 新式发票 `ticket,tier,minutes,usd`：同档多原票按票号各自采信并汇总；红字票为负行。每档可确认净额 = max(0, 原票−红字)，红字超出部分为待冲红字（`RED_UNCOVERED`，差值待证、不可签发），晚到原票补齐重算齐了才可签发。同一票号重跑行按完全一致去重，留档按 run_id 幂等，不重复冲减。旧式三列头账单仍按档位单行对照。
 
 按航次整窗计算，输入须提供确定偏移，未实现 IANA 时区名称、装卸多舱并行额度、非美元计价或电子签章。

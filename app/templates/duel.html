@@ -4,11 +4,24 @@
     <div class="ledger-cap"><strong>船方账单</strong><strong>港方复算</strong></div>
     {% for row in ledger.rows %}
     <div class="entry {{ 'mismatch' if row.code != 'MATCH' }}">
-      <div><small>第 {{ row.tier }} 档{% if row.invoice_line %} · 原件 #{{ row.invoice_line }}{% endif %}</small><b>{{ row.actual_usd or '—' }}{% if row.actual_usd %} USD{% endif %}</b><span>{{ row.actual_minutes if row.actual_minutes is not none else '—' }} min</span></div>
+      <div>
+        <small>第 {{ row.tier }} 档{% if row.invoice_lines %} · 原件
+          {% if row.invoice_line %}#{{ row.invoice_line }}{% else %}#{{ row.invoice_lines|join('、#') }}{% endif %}
+        {% endif %}</small>
+        {% if row.actual_usd is not none %}
+        <b>{{ row.net_usd }} USD</b><span>{{ row.net_minutes }} min · 可确认净额</span>
+        {% if row.credit_usd is defined and row.credit_usd != '0.00' %}
+        <small>原票 {{ row.gross_usd }} USD / {{ row.gross_minutes }} min · 红字 {{ row.credit_usd }} USD / {{ row.credit_minutes }} min</small>
+        {% endif %}
+        {% if row.code == 'RED_UNCOVERED' %}
+        <small class="pending">待冲红字 {{ row.uncovered_red_usd }} USD / {{ row.uncovered_red_minutes }} min，原票到齐前不扣减</small>
+        {% endif %}
+        {% else %}<b>—</b><span>— min</span>{% endif %}
+      </div>
       <div class="delta"><span>{{ row.delta_usd if row.delta_usd is not none else '待证' }}</span><small>{{ row.code }}</small></div>
       <div><small>第 {{ row.tier }} 档 · {{ row.rate_usd_min }} USD/min</small><b>{{ row.expected_usd }} USD</b><span>{{ row.minutes }} min</span></div>
     </div>
     {% endfor %}
   </div>
-  <div class="duel-total"><span>实见 {{ ledger.seen_invoice_usd }} USD</span><strong>{{ ledger.delta_usd if ledger.delta_usd is not none else '待证' }}</strong><span>应计 {{ ledger.expected_usd }} USD</span></div>
+  <div class="duel-total"><span>可确认净额 {{ ledger.confirmed_net_usd }} USD{% if ledger.uncovered_red_usd != '0.00' %} · 待冲红字 {{ ledger.uncovered_red_usd }} USD{% endif %}</span><strong>{{ ledger.delta_usd if ledger.delta_usd is not none else '待证' }}</strong><span>应计 {{ ledger.expected_usd }} USD</span></div>
 </section>

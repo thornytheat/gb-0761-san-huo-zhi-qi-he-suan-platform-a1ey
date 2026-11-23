@@ -3,7 +3,7 @@ import io
 
 from app.errors import Rejected
 from app.reasons import issue
-from .contract import HEADERS
+from .contract import HEADERS, OPTIONAL_HEADERS
 from .values import required
 
 
@@ -11,7 +11,6 @@ def rows(source, text):
     text = text.removeprefix('\ufeff')
     if not text:
         raise Rejected("EMPTY_FILE", source)
-    expected = HEADERS[source].split(',')
     reader = csv.reader(io.StringIO(text, newline=''), strict=True)
     header = None
     stats = {"input": 0, "blank": 0, "headers": 0}
@@ -29,7 +28,8 @@ def rows(source, text):
                 continue
             if header is None:
                 header = [value.strip() for value in row]
-                if sorted(header) != sorted(expected):
+                allowed = [set(columns.split(',')) for columns in OPTIONAL_HEADERS.get(source, (HEADERS[source],))]
+                if not any(set(header) == columns for columns in allowed):
                     raise Rejected("BAD_HEADER", source)
                 stats["headers"] = 1
                 continue
